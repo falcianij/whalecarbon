@@ -1,0 +1,90 @@
+---
+title: "data_wrangling"
+author: "Jonathan Falciani"
+date: "2023-04-21"
+output: html_document
+---
+
+PROJECT: WhaleCarbon
+CLASS: Dynamical Oceanography
+INSTRUCTOR: Andre Visser
+CONTRIBUTORS: Jonathan E. Falciani, Natalie Philib Gadelrab, Hannah Nicky B. Heutz
+AUTHOR: JEF
+
+EXPLANATION: This document should be able to clean the whale occurrence datasets so that they only contain information useful to our study.
+
+
+________________________________________________________________________________
+# Packages
+
+```{r}
+library(here)
+```
+
+
+________________________________________________________________________________
+# Initialization
+
+```{r}
+filenames <- c("bryde/brydei/", "bryde/edeni/",
+               "minke/acutorostrata/", "minke/bonaerensis/",
+               "right/australis/", "right/glacialis/", "right/japonica/",
+               "gray/", "blue/", "fin/", "humpback/", "sei/", "bowhead/")
+           
+commonnames <- c("bryde", "bryde",
+                 "minke", "minke",
+                 "right", "right", "right",
+                 "gray", "blue", "fin", "humpback", "sei", "bowhead")
+               
+uniquenames <- c("brydei", "edeni",
+                 "acutorostrata", "bonaerensis",
+                 "australis", "glacialis", "japonica",
+                 "gray", "blue", "fin", "humpback", "sei", "bowhead")
+
+#names <- c("bryde", "minke", "right", "gray", "blue", "fin", "humpback", "sei", "bowhead")
+#bryde <- c("brydei", "edeni")
+#minke <- c("acutorostrata", "bonaerensis")
+#right <- c("australis", "glacialis", "japonica")
+```
+
+```{r}
+useful_columnnames <- c("name", "type",
+                        "id", "scientificname",
+                        "decimallongitude", "decimallatitude", "waterbody",
+                        "date_start", "date_mid", "date_end", "date_year", "georeferenceddate",
+                        "minimumdepthinmeters",	"maximumdepthinmeters",	"coordinateuncertaintyinmeters",
+                        "shoredistance",	"bathymetry",	"sst", "sss", "marine", "brackish", "freshwater", "terrestrial",
+                        "geodeticdatum")
+```
+
+
+________________________________________________________________________________
+# Data clean loop
+
+```{r}
+data_init <- read.csv(here("data/obis/bryde/brydei/occurrence.csv"), header = TRUE)
+data_init$name <- uniquenames[1]
+data_init$type <- commonnames[1]
+data_init <- subset(data_init, select = useful_columnnames)
+
+i <- 2
+
+while (i <= length(filenames))
+{
+  whale <- filenames[i]
+  readpath <- paste("data/obis/", whale, sep = "")
+  
+  occurrence <- read.csv(here(paste(readpath, "/occurrence.csv", sep = "")), header = TRUE)
+  occurrence$name <- uniquenames[i]
+  occurrence$type <- commonnames[i]
+  occurrence <- subset(occurrence, select = useful_columnnames)
+  
+  write.csv(occurrence, here(paste(readpath, uniquenames[i], "_occurrence.csv", sep = "")))
+  data_init <- rbind(data_init, occurrence)
+  
+  i <- i+1
+}
+
+write.csv(data_init, here("data/obis/all_occurrence.csv"))
+```
+

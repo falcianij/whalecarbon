@@ -1,0 +1,124 @@
+---
+title: "SDM"
+author: "Jonathan Falciani"
+date: "2023-04-24"
+output: html_document
+---
+
+# Packages
+
+```{r setup, include=FALSE}
+library(biomod2)
+library(terra)
+library(gridExtra)
+library(here)
+library(tidyterra)
+library(ggtext)
+library(tidyverse)
+library(spThin)
+```
+
+
+# Importing data
+
+```{r}
+#occurrence <- read.csv(here('data/obis/all_occurrence.csv'), header = TRUE) %>%
+  #filter(type == "blue")
+#  filter(name == "acutorostrata")
+  #select("type") %>%
+  #distinct()
+
+occurrence <- read.csv(here('data/obis/bowhead/bowhead_occurrence_thinned.csv'))
+occurrence$presabs <- 1
+
+chl <- rast(here('data/gis/clipped/chl_clipped_res.tif'))
+vel <- rast(here('data/gis/clipped/vel_clipped_res.tif'))
+dep <- rast(here('data/gis/clipped/dep_clipped_res.tif'))
+ice <- rast(here('data/gis/clipped/ice_clipped_res.tif'))
+dis <- rast(here('data/gis/clipped/dis_clipped_res.tif'))
+sss <- rast(here('data/gis/clipped/sss_clipped_res.tif'))
+sst <- rast(here('data/gis/clipped/sst_clipped_res.tif'))
+
+image <- c(chl, vel, dep, ice, dis, sss, sst)
+#image <- c(chl, vel, ice, sss, sst)
+#image2 <- c(dep, dis)
+
+plot(image)
+#plot(image2)
+```
+
+
+```{r fig.height=15, fig.width=20}
+myBiomodData <- BIOMOD_FormatingData(resp.var = occurrence$presabs,
+                                          expl.var = image,
+                                          resp.xy = occurrence[, c('lon', 'lat')],
+                                          #resp.xy = occurrence[, c('decimallongitude', 'decimallatitude')],
+                                          resp.name = 'bowhead',
+                                          PA.nb.absences = length(occurrence$presabs),
+                                          PA.nb.rep = 1,
+                                          PA.strategy = 'random',
+                                          filter.raster = TRUE)
+
+plot(myBiomodData)
+```
+
+
+```{r}
+myBiomodOptions <- BIOMOD_ModelingOptions()
+
+myBiomodModelOut <- BIOMOD_Modeling(bm.format = myBiomodData,
+                                    modeling.id = 'AllModels',
+                                    bm.options = myBiomodOptions,
+                                    #CV.strategy = 'random',
+                                    #CV.nb.rep = 2,
+                                    #CV.perc = 0.8,
+                                    metric.eval = c('TSS','ROC'),
+                                    var.import = 2,
+                                    seed.val = 42)
+myBiomodModelOut
+```
+
+```{r}
+# Get evaluation scores & variables importance
+get_evaluations(myBiomodModelOut)
+get_variables_importance(myBiomodModelOut)
+
+# Represent evaluation scores & variables importance
+bm_PlotEvalMean(bm.out = myBiomodModelOut)
+bm_PlotEvalBoxplot(bm.out = myBiomodModelOut, group.by = c('algo', 'algo'))
+bm_PlotEvalBoxplot(bm.out = myBiomodModelOut, group.by = c('algo', 'run'))
+bm_PlotVarImpBoxplot(bm.out = myBiomodModelOut, group.by = c('expl.var', 'algo', 'algo'))
+bm_PlotVarImpBoxplot(bm.out = myBiomodModelOut, group.by = c('expl.var', 'algo', 'run'))
+bm_PlotVarImpBoxplot(bm.out = myBiomodModelOut, group.by = c('algo', 'expl.var', 'run'))
+
+# Represent response curves
+bm_PlotResponseCurves(bm.out = myBiomodModelOut, 
+                      models.chosen = get_built_models(myBiomodModelOut)[c(1:3, 12:14)],
+                      fixed.var = 'median')
+bm_PlotResponseCurves(bm.out = myBiomodModelOut, 
+                      models.chosen = get_built_models(myBiomodModelOut)[c(1:3, 12:14)],
+                      fixed.var = 'min')
+bm_PlotResponseCurves(bm.out = myBiomodModelOut, 
+                      models.chosen = get_built_models(myBiomodModelOut)[3],
+                      fixed.var = 'median',
+                      do.bivariate = TRUE)
+```
+
+```{r fig.height=15, fig.width=20}
+# Project single models
+myBiomodProj <- BIOMOD_Projection(bm.mod = myBiomodModelOut,
+                                  proj.name = 'Current',
+                                  new.env = image,
+                                  models.chosen = 'all',
+                                  metric.binary = 'all',
+                                  metric.filter = 'all',
+                                  build.clamping.mask = TRUE)
+myBiomodProj
+plot(myBiomodProj)
+```
+
+```{r}
+writeRaster(myBiomodProj, here('data/obis/blue/blue_occurrence_thinned.tif'), overwrite=FALSE)
+```
+
+
